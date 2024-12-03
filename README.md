@@ -1,6 +1,3 @@
-# Path Planner
-
-![Visualization of the codebase](./codebase-diagram.svg)
+# Speed Profiler
 
 ## Features
-plans the path :)
