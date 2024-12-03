@@ -1,0 +1,24 @@
+<launch>
+  <arg name="frame" default="robot/odom" />
+
+  <!-- Track selection -->
+  <!-- Among: "acceleration", "skidpad", "trackdrive" -->
+  <arg name="track_name"    default="trackdrive" />
+
+  <group ns="navigation">
+    <!-- Speed profiler -->
+    <rosparam command="load" file="$(find speed_profiler)/config/speed_profiler.yaml" />
+    <node name="speed_profiler"  pkg="speed_profiler" type="run_speed_profiler.py" output="screen" >
+      <param name="~frame" value="$(arg frame)" />
+      <param name="track_name" value="$(arg track_name)" />
+
+      <remap from="~skidpad/path/without_speeds" to="/skidpad/planned_path" />
+      <remap from="~path/without_speeds" to="/navigation/speed_profiler/path" />
+      <remap from="~odometry" to="/slam/output/odom" />
+      <remap from="~path/with_speeds" to="/navigation/speed_profiler/path" />
+      <remap from="~dbu1" to="/ros2can/recv/dbu_status_1" />
+      <remap from="~lap_counter" to="/lap_counter" />
+      <remap from="~path/vizualization" to="/navigation/speed_profiler/vizualization" />
+    </node>
+  </group>
+</launch>

@@ -1,0 +1,22 @@
+version: '3.8'
+
+### -----------ROS MASTER----------------- ###
+# Do not edit! Works with melodic and noetic
+services:
+
+### -----------PACKAGE----------------- ###
+  speed_profiler_pkg:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    #runtime: nvidia 
+    environment:
+      - PACKAGE_NAME=speed_profiler_pkg
+    volumes:
+      - ./:/ws/src/speed_profiler_pkg
+      - ../MARS/commons/fs_msgs:/ws/src/fs_msgs:ro
+      - ../MARS/commons/ros2can/ros2can_msgs:/ws/src/ros2can_msgs:ro
+    network_mode: host
+    entrypoint: /ws/src/speed_profiler_pkg/docker-entrypoint.sh  # <-- YOUR TODO: change to name of your repository
+    command: sh -c "while true; do sleep 1; done"

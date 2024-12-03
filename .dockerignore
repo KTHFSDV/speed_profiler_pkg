@@ -1,0 +1,16 @@
+# .dockerignore
+.git/
+.github/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.swp
+*.bak
+*~
+*.tmp
+*.temp
+*.db
+*.sublime-*
