@@ -65,13 +65,12 @@ class SpeedProfilerROSInterface(object):
             'path_similar_mse',
             'EBS_speed_limit',
             'acceleration_speed_limit'
+            'safe_lap'
         ]:
             param_path = '/navigation/{}/{}'.format(mission_param_prefix, parameter_name)
             try:
                 self.parameters[parameter_name] = float(rospy.get_param(param_path))
-                rospy.loginfo("Parameter '{}' found with value '{}'.".format(parameter_name, self.parameters[parameter_name]))
             except KeyError:
-                rospy.logwarn("Parameter '{}' not found at '{}'.".format(parameter_name, param_path))
                 self.parameters[parameter_name] = None  # Assign a placeholder or default value
 
 

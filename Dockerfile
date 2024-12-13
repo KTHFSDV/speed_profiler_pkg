@@ -9,9 +9,9 @@ FROM ros:melodic-ros-base-bionic
 
 # ENV ROS_ROOT=/opt/ros/noetic        
 ENV ROS_ROOT=/opt/ros/melodic         
-#<--- TODO: change to your ROS version to mach base image
+#<--- TODO: change to your ROS version to match base image
 
-# Set upp workspace
+# Set up workspace
 RUN mkdir -p /ws/src   
 
 # Set noninteractive installation
@@ -33,7 +33,8 @@ RUN apt-get update && apt-get upgrade -y && \
     # python3-setuptools \
     # python3-venv \
     # python3-tk \
-    gfortran\
+    gfortran \
+    wget \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -46,10 +47,22 @@ RUN pip install \
 RUN pip install --upgrade --force-reinstall numpy
 RUN pip list
 
+# Download and install Intel MKL
+RUN wget https://anaconda.org/intel/mkl/2023.0.0/download/linux-64/mkl-2023.0.0-intel64.tar.bz2 \
+    && tar -xjf mkl-2023.0.0-intel64.tar.bz2 \
+    && rm mkl-2023.0.0-intel64.tar.bz2
 
+# Set environment variables for MKL
+ENV MKLROOT=/mkl-2023.0.0-intel64
+
+# Install Pardiso solver
+RUN cd /mkl-2023.0.0-intel64 \
+    && ./configure \
+    && make \
+    && make install
 
 # Installing of pip dependencies
-#RUN pip3 install \
+# RUN pip3 install \
 #     # EXAMPLE: \
 #     # torch \
 #     # torchvision \
@@ -60,8 +73,7 @@ RUN pip list
 
 
 # Optional: Install additional dependencies with script
-#COPY scripts/install.sh scripts/
-#RUN chmod +x scripts/install.sh && bash .scripts/install.sh
+# COPY scripts/install.sh scripts/
+# RUN chmod +x scripts/install.sh && bash scripts/install.sh
 
 WORKDIR /ws
-

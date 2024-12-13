@@ -14,7 +14,7 @@ class SpeedProfileSelector(object):
 
         ## If the MSE to the last paths position is below this value, the old profile will be used.
         self._path_similar_mse = parameters['path_similar_mse']
-
+        
         ## Speed in Lap 1 or if speed optimization fails
         self._safe_speed = parameters['safe_speed']
         
@@ -42,7 +42,7 @@ class SpeedProfileSelector(object):
         self.time = 0  
 
         ## Lap 1 complete flag
-        self._in_first_lap = False
+        self._in_first_lap = parameters['safe_lap']
         self.lap = 1
 
         rospy.loginfo("Finished intializing SpeedProfileSelector")
@@ -107,10 +107,11 @@ class SpeedProfileSelector(object):
             return self._use_safe_speed(path)
         else:
             # Use v_final from the previous profile (if it exists) as v_init for the current computation
-            # v_init = self._previous_path.speed_profile[-1] if self._previous_path and self._previous_path.speed_profile else self._safe_speed
-            path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-            # path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-
+            if self._previous_path:
+                last_known_velocity = self._previous_path.speed_profile[-1]
+                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=last_known_velocity)
+            else:
+                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
         # If path is too similar to path for which speed profile was computed,
         # skip new computation
         if self.check_paths_similar(path, self._previous_path, self._path_similar_mse):
@@ -160,7 +161,54 @@ class SpeedProfileSelector(object):
             speed_limit=speed_limit)
         return path
 
-    
+    def get_closest_waypoint(waypoints, car_pose):
+        """
+        Finds the closest waypoint that is in front of the car.
+        
+        Args:
+            waypoints (list of np.ndarray): List of 2D waypoints (x, y).
+            car_pose (np.ndarray): The car's pose as [x, y, theta].
 
+        Returns:
+            int: Index of the closest waypoint in front of the car.
+        """
+        min_distance = float('inf')
+        closest_waypoint = -1
+
+        for i in range(len(waypoints)):
+            waypoint_dir = waypoints[i] - car_pose[:2]
+            waypoint_angle = np.arctan2(waypoint_dir[1], waypoint_dir[0])
+
+            # Check if the waypoint is in front of the car
+            angle_dif = angle_diff(car_pose[2], waypoint_angle)
+            if -np.pi / 2 <= angle_dif <= np.pi / 2:
+                # This waypoint is in front of the car
+                return min(i, len(waypoints) - 1)
+
+        return len(waypoints) - 1
+
+    def angle_diff(theta1, theta2):
+        """
+        Computes the smallest angular difference between two angles.
+        
+        Args:
+            theta1 (float): First angle (in radians).
+            theta2 (float): Second angle (in radians).
+
+        Returns:
+            float: Angular difference in radians, normalized between -pi and pi.
+        """
+        return (theta2 - theta1 + np.pi) % (2 * np.pi) - np.pi
+
+    def _use_skidpad_speed_profile(self, path, pose):
+        """ Add profile with constant speed to path.
+
+        @param path fs_msgs/PlannedPath without speed profile
+        @return fs_msgs/PlannedPath with speed profile
+        """
+
+        path_id = get_closest_waypoint(path.curvatures, pose)
+        path.speed_profile = len(path.x) * [self._safe_speed]
+        return path
 
 
