@@ -42,10 +42,8 @@ class SpeedProfileSelector(object):
         self.time = 0  
 
         ## Lap 1 complete flag
-        self._in_first_lap = False
+        self._in_first_lap = parameter['safe_lap']
         self.lap = 1
-
-        rospy.loginfo("Finished intializing SpeedProfileSelector")
 
     def update_lap(self, lap):
         """ Check if car is in first lap """
@@ -107,9 +105,11 @@ class SpeedProfileSelector(object):
             return self._use_safe_speed(path)
         else:
             # Use v_final from the previous profile (if it exists) as v_init for the current computation
-            # v_init = self._previous_path.speed_profile[-1] if self._previous_path and self._previous_path.speed_profile else self._safe_speed
-            path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-            # path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
+            if self._previous_path:
+                last_known_velocity = self._previous_path.speed_profile[-1]
+                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=last_known_velocity)
+            else:
+                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
 
         # If path is too similar to path for which speed profile was computed,
         # skip new computation
