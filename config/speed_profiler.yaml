@@ -15,6 +15,7 @@ mission_1:
   lateral_acceleration_limit: 14.0
 
   path_similar_mse: 0.1
+  safe_lap: true
 
 # Skidpad
 mission_2:
@@ -30,6 +31,7 @@ mission_2:
   lateral_acceleration_limit: 14.0
 
   path_similar_mse: 0.1
+  safe_lap: true
 
 # Trackdrive
 mission_3:
@@ -45,6 +47,7 @@ mission_3:
   lateral_acceleration_limit: 14.0
 
   path_similar_mse: 0.1
+  safe_lap: true
   
 # Uses Emergency Brakes System (EBS) speed limit
 mission_4:
@@ -59,6 +62,7 @@ mission_4:
   lateral_acceleration_limit: 4
   accel_min: -2
   accel_max: 2
+  safe_lap: true
 
   # If the MSE of positions and previous path positions is below,
   # speed profile computation will be skipped and previous solution is used.
