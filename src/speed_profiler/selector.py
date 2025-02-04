@@ -45,8 +45,6 @@ class SpeedProfileSelector(object):
         self._in_first_lap = parameters['safe_lap']
         self.lap = 1
 
-        rospy.loginfo("Finished intializing SpeedProfileSelector")
-
     def update_lap(self, lap):
         """ Check if car is in first lap """
         if lap > 1:
@@ -91,41 +89,47 @@ class SpeedProfileSelector(object):
         return errors.mean() < mse_threshold
 
     def select_speed_profile(self, path, pose):
-        """ Add an appropriate speed profile to the given path.
+        """ 
+        Add an appropriate speed profile to the given path.
 
         @param path fs_msgs/PlannedPath without speed profile
         @return fs_msgs/PlannedPath with speed profile
         """
-        #distance_traveled = is_halfway_through(path, pose)
 
-        # If car is in first lap, use constant speed
+        # Check if the car is in the first lap and not in the acceleration event
         if self._in_first_lap and not self._acceleration_event:
-            logger.debug(
-                "In first lap. Returning constant speed.")
+            logger.debug("In first lap. Returning constant speed.")
             return self._use_safe_speed(path)
-        elif self.mission == 2:
-            return self._use_safe_speed(path)
-        else:
-            # Use v_final from the previous profile (if it exists) as v_init for the current computation
-            if self._previous_path:
-                last_known_velocity = self._previous_path.speed_profile[-1]
-                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=last_known_velocity)
-            else:
-                path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-        # If path is too similar to path for which speed profile was computed,
-        # skip new computation
+
+        # Check if the current path is too similar to the previous one
         if self.check_paths_similar(path, self._previous_path, self._path_similar_mse):
-            logger.debug(
-                "Path too similar. Using previous speed profile.")
+            logger.debug("Path too similar. Using previous speed profile.")
             return self._use_previous_speed_profile(path)
 
+        # Use the last known velocity or a safe speed as the initial velocity
+        v_init = self._safe_speed
+        if self._previous_path:
+            v_init = self._previous_path.speed_profile[-1]
+        
+        # Attempt to compute the optimal speed profile
+        path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=v_init)
+
+        # Update and return the path if an optimal speed profile is available
         if path.speed_profile is not None:
-            logger.debug("Using optimal speed profile.")
+            logger.debug("Using last known velocity optimal speed profile.")
             self._previous_path = path
             return path
 
-        logger.warning(
-            "Optimization failed. Falling back to safe speed.")
+        # Attempt to compute the speed profile
+        path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
+        # Update and return the path if an optimal speed profile is available
+        if path.speed_profile is not None:
+            logger.debug("Using safe speed optimal speed profile.")
+            self._previous_path = path
+            return path
+
+        # Fallback to a safe speed if optimization fails
+        logger.warning("Optimization failed. Falling back to safe speed.")
         return self._use_safe_speed(path)
 
     def _use_safe_speed(self, path):
@@ -207,8 +211,8 @@ class SpeedProfileSelector(object):
         @return fs_msgs/PlannedPath with speed profile
         """
 
-        path_id = get_closest_waypoint(path.curvatures, pose)
-        path.speed_profile = len(path.x) * [self._safe_speed]
-        return path
-
+        if self._previous_path:
+            return self._previous_path.speed_profile
+    
+        return self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
 

@@ -42,13 +42,10 @@ class SpeedProfileOptimizer(object):
         # OSQP solver instance (initialized in `initialize_solver`)
         self._solver = None
 
-        rospy.loginfo("Finished intializing SpeedProfileOptimizer")
-
     def initialize_solver(self, v_max, v_init, v_final):
         """
         Initialize the OSQP solver with fixed matrix structures.
         """
-        print("intialize")
         # Create problem matrices
         P = self._osqp_get_P(self._D1)
         q = self._osqp_get_q(v_max)
@@ -56,13 +53,12 @@ class SpeedProfileOptimizer(object):
 
         # Initialize the OSQP solver once
         self._solver = osqp.OSQP()
-        self._solver.setup(P, q, A, l, u, verbose=False, warm_start=True, linsys_solver="qdldl")
+        self._solver.setup(P, q, A, l, u, verbose=False, warm_start=True)
 
     def update_solver(self, v_max, v_init, v_final):
         """
         Update the OSQP solver's problem matrices with new data without reinitializing.
         """
-        print("update")
         # Update problem matrices
         q = self._osqp_get_q(v_max)
         A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)

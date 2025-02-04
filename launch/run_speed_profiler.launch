@@ -3,7 +3,7 @@
 
   <!-- Track selection -->
   <!-- Among: "acceleration", "skidpad", "trackdrive" -->
-  <arg name="track_name"    default="trackdrive" />
+  <arg name="track_name"    default="trackdrive"/>
 
   <group ns="navigation">
     <!-- Speed profiler -->

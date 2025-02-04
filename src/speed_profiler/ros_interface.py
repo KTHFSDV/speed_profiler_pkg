@@ -30,6 +30,7 @@ class SpeedProfilerROSInterface(object):
         ## Latest path from path constructor
         self._latest_path = None
         self._lap_counter = 1
+        self.parameters['safe_lap'] = rospy.get_param('/navigation/safe_lap')
 
         self.vehicle_pose = None
         #commented out for debugging
@@ -64,12 +65,12 @@ class SpeedProfilerROSInterface(object):
             'safe_speed',
             'path_similar_mse',
             'EBS_speed_limit',
-            'acceleration_speed_limit'
-            'safe_lap'
+            'acceleration_speed_limit',
         ]:
             param_path = '/navigation/{}/{}'.format(mission_param_prefix, parameter_name)
             try:
                 self.parameters[parameter_name] = float(rospy.get_param(param_path))
+                rospy.loginfo("Parameter '{}' found with value '{}'.".format(parameter_name, self.parameters[parameter_name]))
             except KeyError:
                 self.parameters[parameter_name] = None  # Assign a placeholder or default value
 
