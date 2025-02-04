@@ -1,3 +1,6 @@
+#Safe speed starting lap
+safe_lap: false
+
 # Acceleration
 mission_1:
   alpha_smooth: 3.0
