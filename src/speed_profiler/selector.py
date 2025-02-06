@@ -42,7 +42,7 @@ class SpeedProfileSelector(object):
         self.time = 0  
 
         ## Lap 1 complete flag
-        self._in_first_lap = parameter['safe_lap']
+        self._in_first_lap = parameters['safe_lap']
         self.lap = 1
 
     def update_lap(self, lap):
