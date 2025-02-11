@@ -96,11 +96,16 @@ class SpeedProfileSelector(object):
         @return fs_msgs/PlannedPath with speed profile
         """
 
-        # Check if the car is in the first lap and not in the acceleration event
-        if self._in_first_lap and not self._acceleration_event:
-            logger.debug("In first lap. Returning constant speed.")
-            return self._use_safe_speed(path)
+        if self.mission == 2:
+            path = self._use_skidpad_speed_profile(path)
+        else:
+            path = self._use_speed_profile(path)
 
+        average_speed = sum(path.speed_profile) / len(path.speed_profile)
+        print("Average speed: {}".format(average_speed))
+        return path
+
+    def _use_speed_profile(self, path):
         # Check if the current path is too similar to the previous one
         if self.check_paths_similar(path, self._previous_path, self._path_similar_mse):
             logger.debug("Path too similar. Using previous speed profile.")
@@ -127,10 +132,28 @@ class SpeedProfileSelector(object):
             logger.debug("Using safe speed optimal speed profile.")
             self._previous_path = path
             return path
-
-        # Fallback to a safe speed if optimization fails
+        
+         # Fallback to a safe speed if optimization fails
         logger.warning("Optimization failed. Falling back to safe speed.")
         return self._use_safe_speed(path)
+
+
+    def _use_skidpad_speed_profile(self, path):
+        """
+        Adjusts the speed profile for the given skidpad path.
+        """
+        logger.debug("Using skidpad speed profile")
+        
+        if not self._previous_path:
+            path = self._use_optimal_speed_profile(
+                path, speed_limit=self.real_speed_limit, v_init=self._safe_speed
+            )
+        else:
+            prev_speed_profile = self._previous_path.speed_profile
+            path.speed_profile = prev_speed_profile[-len(path.x):] if len(prev_speed_profile) > len(path.x) else prev_speed_profile
+        
+        self._previous_path = path
+        return path 
 
     def _use_safe_speed(self, path):
         """ Add profile with constant speed to path.
@@ -203,16 +226,5 @@ class SpeedProfileSelector(object):
             float: Angular difference in radians, normalized between -pi and pi.
         """
         return (theta2 - theta1 + np.pi) % (2 * np.pi) - np.pi
-
-    def _use_skidpad_speed_profile(self, path, pose):
-        """ Add profile with constant speed to path.
-
-        @param path fs_msgs/PlannedPath without speed profile
-        @return fs_msgs/PlannedPath with speed profile
-        """
-
-        if self._previous_path:
-            return self._previous_path.speed_profile
     
-        return self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-
+    
