@@ -24,14 +24,7 @@ class SpeedProfileSelector(object):
         self.ebs_speed_limit = parameters['EBS_speed_limit']
 
         ##Selected mission
-        self.mission = mission
-
-        self._acceleration_event = False
-        if self.mission == 1:
-            self._acceleration_event = True 
-            self.real_speed_limit = self.acceleration_speed_limit
-        elif self.mission == 4:
-            self.real_speed_limit = self.ebs_speed_limit
+        self.update_mission(mission)
         
         ## Instance of the SpeedProfiler class
         self._speed_profiler = speed_profiler
@@ -68,7 +61,10 @@ class SpeedProfileSelector(object):
         @param y: List of N y coordinates on path
         @return List of N-1 euclidean distances between the (x,y) points.
         """
-        return np.linalg.norm(np.diff(np.array([x, y]), axis=1), axis=0).tolist()
+        # return np.linalg.norm(np.diff(np.array([x, y]), axis=1), axis=0).tolist()
+        diffs = np.diff(np.array([x, y]), axis=1)
+        distances = np.linalg.norm(diffs, axis=0)
+        return distances.tolist()
 
     def check_paths_similar(self, path1, path2, mse_threshold):
         """ Checks if two paths are similar (by computing mse between points).
@@ -100,9 +96,7 @@ class SpeedProfileSelector(object):
             path = self._use_skidpad_speed_profile(path)
         else:
             path = self._use_speed_profile(path)
-
-        average_speed = sum(path.speed_profile) / len(path.speed_profile)
-        print("Average speed: {}".format(average_speed))
+            
         return path
 
     def _use_speed_profile(self, path):
@@ -124,14 +118,6 @@ class SpeedProfileSelector(object):
             logger.debug("Using last known velocity optimal speed profile.")
             self._previous_path = path
             return path
-
-        # Attempt to compute the speed profile
-        path = self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
-        # Update and return the path if an optimal speed profile is available
-        if path.speed_profile is not None:
-            logger.debug("Using safe speed optimal speed profile.")
-            self._previous_path = path
-            return path
         
          # Fallback to a safe speed if optimization fails
         logger.warning("Optimization failed. Falling back to safe speed.")
@@ -145,12 +131,62 @@ class SpeedProfileSelector(object):
         logger.debug("Using skidpad speed profile")
         
         if not self._previous_path:
-            path = self._use_optimal_speed_profile(
-                path, speed_limit=self.real_speed_limit, v_init=self._safe_speed
+            x = np.array(path.x)
+            y = np.array(path.y)
+            curvatures = np.array(path.curvatures)
+
+            # Initialize the speed profile with zeros
+            speed_profile = np.zeros_like(path.x)
+
+            tolerance = 1e-5  
+            # Calculate the squared distance between consecutive points to check proximity
+            diffs_x = np.diff(x)
+            diffs_y = np.diff(y)
+
+            # Check if the squared distance is less than or equal to the tolerance
+            distances_squared = diffs_x**2 + diffs_y**2
+            duplicates = distances_squared <= tolerance**2  # Consider points duplicates if distance is less than tolerance
+
+            # Replace the curvatures of duplicates with the average of the previous and next curvature
+            new_curvatures = np.copy(curvatures)
+            new_curvatures[1:][duplicates] = (curvatures[:-1][duplicates] + curvatures[1:][duplicates]) / 2
+
+            # Filter out the duplicates by keeping only the first occurrence
+            new_x = x[np.concatenate(([True], ~duplicates))]
+            new_y = y[np.concatenate(([True], ~duplicates))]
+            new_curvatures = new_curvatures[np.concatenate(([True], ~duplicates))]
+
+            new_distances = np.array(self.get_distances_from_points(new_x, new_y))
+            # Find indices where new_distances exist in the original distances
+            indices = np.searchsorted(x, new_x)
+            new_speed_profile = self._speed_profiler.compute_speed_profile(
+                curvatures=new_curvatures,
+                distances=new_distances,
+                v_init=self._safe_speed, v_final=None,
+                speed_limit=self.real_speed_limit
             )
+            # Assign the computed speed values to the corresponding indices
+            speed_profile[indices] = new_speed_profile
+
+            # Fill the zeros using NumPy interpolation
+            mask = speed_profile == 0  # Identify zero values
+            known_indices = np.where(~mask)[0]  # Indices of known (non-zero) values
+            known_values = speed_profile[~mask]  # Values of known speed points
+            unknown_indices = np.where(mask)[0]  # Indices where speed is zero
+
+            # Apply linear interpolation
+            speed_profile[mask] = np.interp(unknown_indices, known_indices, known_values)
+
+            # Assign the final speed profile to path
+            path.speed_profile = speed_profile
+            # for i in range(0, len(speed_profile), 100):  # Print in chunks of 100 elements
+            #     print(speed_profile[i:i+100])
         else:
             prev_speed_profile = self._previous_path.speed_profile
-            path.speed_profile = prev_speed_profile[-len(path.x):] if len(prev_speed_profile) > len(path.x) else prev_speed_profile
+            path.speed_profile = prev_speed_profile
+            # print(len(path.x))
+            # path.speed_profile = prev_speed_profile[-len(path.x):] if len(prev_speed_profile) > len(path.x) else prev_speed_profile
+            # print(len(path.speed_profile))
         
         self._previous_path = path
         return path 
@@ -187,44 +223,3 @@ class SpeedProfileSelector(object):
             v_init=v_init, v_final=v_final,
             speed_limit=speed_limit)
         return path
-
-    def get_closest_waypoint(waypoints, car_pose):
-        """
-        Finds the closest waypoint that is in front of the car.
-        
-        Args:
-            waypoints (list of np.ndarray): List of 2D waypoints (x, y).
-            car_pose (np.ndarray): The car's pose as [x, y, theta].
-
-        Returns:
-            int: Index of the closest waypoint in front of the car.
-        """
-        min_distance = float('inf')
-        closest_waypoint = -1
-
-        for i in range(len(waypoints)):
-            waypoint_dir = waypoints[i] - car_pose[:2]
-            waypoint_angle = np.arctan2(waypoint_dir[1], waypoint_dir[0])
-
-            # Check if the waypoint is in front of the car
-            angle_dif = angle_diff(car_pose[2], waypoint_angle)
-            if -np.pi / 2 <= angle_dif <= np.pi / 2:
-                # This waypoint is in front of the car
-                return min(i, len(waypoints) - 1)
-
-        return len(waypoints) - 1
-
-    def angle_diff(theta1, theta2):
-        """
-        Computes the smallest angular difference between two angles.
-        
-        Args:
-            theta1 (float): First angle (in radians).
-            theta2 (float): Second angle (in radians).
-
-        Returns:
-            float: Angular difference in radians, normalized between -pi and pi.
-        """
-        return (theta2 - theta1 + np.pi) % (2 * np.pi) - np.pi
-    
-    

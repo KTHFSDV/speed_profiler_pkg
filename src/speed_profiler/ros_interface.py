@@ -18,23 +18,23 @@ class SpeedProfilerROSInterface(object):
         self._rate = rospy.Rate(rate)
 
         self._track_name = rospy.get_param('~track_name')
-
+        
+        #commented out for debugging
         # Set the mission based on track_name, with trackdrive as default
-        self.mission = 3
+        self.mission = rospy.get_param('~mission')   
 
         self.load_parameters_for_mission(self.mission)  # Load initial mission params
 
         self.parameters['acceleration_event'] = self._track_name == 'acceleration'
         ## Path Frame
-        self._frame = "odom" #rospy.get_param('~frame')
+        # self._frame = rospy.get_param('~frame')
+        self._frame = "odom"
         ## Latest path from path constructor
         self._latest_path = None
         self._lap_counter = 1
         self.parameters['safe_lap'] = rospy.get_param('/navigation/safe_lap')
 
         self.vehicle_pose = None
-        #commented out for debugging
-        #self.parameters['mission'] = rospy.get_param('~mission')
 
         # Subscribe to mission
         rospy.Subscriber('~dbu1', dbu_status_1, self._cb_dbu1)

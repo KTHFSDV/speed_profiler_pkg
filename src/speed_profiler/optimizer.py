@@ -4,6 +4,7 @@ import time
 import numpy as np
 import osqp
 from scipy import sparse
+from qpsolvers import solve_qp
 
 from speed_profiler.ros_interface import Logger as logger
 
@@ -53,7 +54,42 @@ class SpeedProfileOptimizer(object):
 
         # Initialize the OSQP solver once
         self._solver = osqp.OSQP()
-        self._solver.setup(P, q, A, l, u, verbose=False, warm_start=True)
+        self._solver.setup(P, q, A, l, u, verbose=True, warm_start=True)
+
+    def compute_skidpad_speed_profile(self, curvatures, distances, v_init, v_final, speed_limit):
+        """
+        Initialize the QP solver using qpsolvers with the same matrix structures.
+        """
+        curvatures = np.array(curvatures)
+        distances = np.array(distances)
+        self._waypoints_count = curvatures.shape[0]
+
+        # Input validation
+        if curvatures.shape != (self._waypoints_count,):
+            # raise ValueError(f'Wrong shape of curvatures. Expected: ({self._waypoints_count},)')
+            raise ValueError('Wrong shape of curvatures. Expected: ({},)'.format(self._waypoints_count))
+        if distances.shape != (self._waypoints_count - 1,):
+            # raise ValueError(f'Wrong shape of distances. Expected: ({self._waypoints_count - 1},)')
+            raise ValueError('Wrong shape of distances. Expected: ({},)'.format(self._waypoints_count - 1))
+
+        # Compute maximum velocities
+        v_max = self._compute_v_max(curvatures, speed_limit)
+        
+        # Initialize solver only once, then update for subsequent calls
+        # Get problem matrices
+        self._D1 = self._get_D1(distances)
+        P = self._osqp_get_P(self._D1).toarray()  # Ensure P is a dense numpy array
+        q = self._osqp_get_q(v_max)
+        A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
+
+        # Convert A, l, and u into inequality constraints format for qpsolvers
+        G = np.vstack([A, -A])  # Stack A and -A for inequality representation
+        h = np.hstack([u, -l])  # Stack upper and lower bounds
+
+        # Solve the QP problem using an available solver (e.g., 'osqp', 'cvxopt', 'quadprog')
+        solution = solve_qp(P, q, G, h, solver='osqp')
+
+        return np.sqrt(np.maximum(solution, 0))
 
     def update_solver(self, v_max, v_init, v_final):
         """
@@ -193,6 +229,7 @@ class SpeedProfileOptimizer(object):
         @param distances: Numpy array of distances between waypoints (in m)
         @return D1 as sparse matrix
         """
-        diag = 0.5 / distances
+
+        diag = 0.5 / (distances) 
         return sparse.diags([-diag, diag], [0, 1],
                             shape=(self._waypoints_count - 1, self._waypoints_count))
