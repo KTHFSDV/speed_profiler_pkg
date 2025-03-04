@@ -56,41 +56,6 @@ class SpeedProfileOptimizer(object):
         self._solver = osqp.OSQP()
         self._solver.setup(P, q, A, l, u, verbose=True, warm_start=True)
 
-    def compute_skidpad_speed_profile(self, curvatures, distances, v_init, v_final, speed_limit):
-        """
-        Initialize the QP solver using qpsolvers with the same matrix structures.
-        """
-        curvatures = np.array(curvatures)
-        distances = np.array(distances)
-        self._waypoints_count = curvatures.shape[0]
-
-        # Input validation
-        if curvatures.shape != (self._waypoints_count,):
-            # raise ValueError(f'Wrong shape of curvatures. Expected: ({self._waypoints_count},)')
-            raise ValueError('Wrong shape of curvatures. Expected: ({},)'.format(self._waypoints_count))
-        if distances.shape != (self._waypoints_count - 1,):
-            # raise ValueError(f'Wrong shape of distances. Expected: ({self._waypoints_count - 1},)')
-            raise ValueError('Wrong shape of distances. Expected: ({},)'.format(self._waypoints_count - 1))
-
-        # Compute maximum velocities
-        v_max = self._compute_v_max(curvatures, speed_limit)
-        
-        # Initialize solver only once, then update for subsequent calls
-        # Get problem matrices
-        self._D1 = self._get_D1(distances)
-        P = self._osqp_get_P(self._D1).toarray()  # Ensure P is a dense numpy array
-        q = self._osqp_get_q(v_max)
-        A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
-
-        # Convert A, l, and u into inequality constraints format for qpsolvers
-        G = np.vstack([A, -A])  # Stack A and -A for inequality representation
-        h = np.hstack([u, -l])  # Stack upper and lower bounds
-
-        # Solve the QP problem using an available solver (e.g., 'osqp', 'cvxopt', 'quadprog')
-        solution = solve_qp(P, q, G, h, solver='osqp')
-
-        return np.sqrt(np.maximum(solution, 0))
-
     def update_solver(self, v_max, v_init, v_final):
         """
         Update the OSQP solver's problem matrices with new data without reinitializing.

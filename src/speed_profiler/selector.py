@@ -100,6 +100,13 @@ class SpeedProfileSelector(object):
         return path
 
     def _use_speed_profile(self, path):
+
+        # Return safe speed if we are using safe first lap
+        if self._in_first_lap:
+            path = self._use_safe_speed(path)
+            self._previous_path = path
+            return path
+
         # Check if the current path is too similar to the previous one
         if self.check_paths_similar(path, self._previous_path, self._path_similar_mse):
             logger.debug("Path too similar. Using previous speed profile.")
@@ -123,6 +130,20 @@ class SpeedProfileSelector(object):
         logger.warning("Optimization failed. Falling back to safe speed.")
         return self._use_safe_speed(path)
 
+    def _smooth_curvature(curvatures, window_size=32):
+        """
+        Smooth the curvature array using a simple moving average filter.
+        """
+        return np.convolve(curvatures, np.ones(window_size)/window_size, mode='same')
+
+    # Define a function to calculate the Exponential Moving Average (EMA)
+    def calculate_ema(self, data, alpha=0.1):
+        ema_values = np.zeros_like(data)
+        ema_values[0] = data[0]  # Initial value is the first data point
+        for i in range(1, len(data)):
+            ema_values[i] = alpha * data[i] + (1 - alpha) * ema_values[i - 1]
+        return ema_values
+
 
     def _use_skidpad_speed_profile(self, path):
         """
@@ -134,6 +155,12 @@ class SpeedProfileSelector(object):
             x = np.array(path.x)
             y = np.array(path.y)
             curvatures = np.array(path.curvatures)
+
+            # Example of smoothing the curvature array
+            smoothed_curvatures_ema = self.calculate_ema(curvatures, 0.1)
+
+            # for i in range(len(curvatures)):
+            #     print("Point: {}, curvature = {}".format(i,  smoothed_curvatures_ema[i]))
 
             # Initialize the speed profile with zeros
             speed_profile = np.zeros_like(path.x)
@@ -148,8 +175,8 @@ class SpeedProfileSelector(object):
             duplicates = distances_squared <= tolerance**2  # Consider points duplicates if distance is less than tolerance
 
             # Replace the curvatures of duplicates with the average of the previous and next curvature
-            new_curvatures = np.copy(curvatures)
-            new_curvatures[1:][duplicates] = (curvatures[:-1][duplicates] + curvatures[1:][duplicates]) / 2
+            new_curvatures = np.copy(smoothed_curvatures_ema)
+            # new_curvatures[1:][duplicates] = (smoothed_curvatures_ema[:-1][duplicates] + smoothed_curvatures_ema[1:][duplicates]) / 2
 
             # Filter out the duplicates by keeping only the first occurrence
             new_x = x[np.concatenate(([True], ~duplicates))]
@@ -158,35 +185,35 @@ class SpeedProfileSelector(object):
 
             new_distances = np.array(self.get_distances_from_points(new_x, new_y))
             # Find indices where new_distances exist in the original distances
-            indices = np.searchsorted(x, new_x)
             new_speed_profile = self._speed_profiler.compute_speed_profile(
                 curvatures=new_curvatures,
                 distances=new_distances,
                 v_init=self._safe_speed, v_final=None,
                 speed_limit=self.real_speed_limit
             )
-            # Assign the computed speed values to the corresponding indices
-            speed_profile[indices] = new_speed_profile
 
-            # Fill the zeros using NumPy interpolation
-            mask = speed_profile == 0  # Identify zero values
-            known_indices = np.where(~mask)[0]  # Indices of known (non-zero) values
-            known_values = speed_profile[~mask]  # Values of known speed points
-            unknown_indices = np.where(mask)[0]  # Indices where speed is zero
+            for i in range(len(new_x)):
+                index = np.where((x == new_x[i]) & (y == new_y[i]))[0][0]
+                speed_profile[index] = new_speed_profile[i]
 
-            # Apply linear interpolation
-            speed_profile[mask] = np.interp(unknown_indices, known_indices, known_values)
+            for i in range(len(x)):
+                if speed_profile[i] == 0:
+                    if i == len(path.x) - 1:  # Last element, average with previous
+                        speed_profile[i] = speed_profile[i-1]
+                    else:  # Middle elements, average with both neighbors
+                        speed_profile[i] = (speed_profile[i-1] + speed_profile[i+1]) / 2
 
-            # Assign the final speed profile to path
+            for i in range(len(x)):
+                print("Point: {}, x: {}, y: {}, curvature = {}, speed = {}".format(i, x[i], y[i], smoothed_curvatures_ema[i], speed_profile[i]))
+
             path.speed_profile = speed_profile
-            # for i in range(0, len(speed_profile), 100):  # Print in chunks of 100 elements
-            #     print(speed_profile[i:i+100])
+
+            
         else:
             prev_speed_profile = self._previous_path.speed_profile
             path.speed_profile = prev_speed_profile
-            # print(len(path.x))
-            # path.speed_profile = prev_speed_profile[-len(path.x):] if len(prev_speed_profile) > len(path.x) else prev_speed_profile
-            # print(len(path.speed_profile))
+
+        
         
         self._previous_path = path
         return path 
