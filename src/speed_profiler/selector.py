@@ -101,13 +101,12 @@ class SpeedProfileSelector(object):
         return path
 
     def _use_speed_profile(self, path):
-
-        # Return safe speed if we are using safe first lap
-        if self._in_first_lap:
-            path = self._use_safe_speed(path)
-            self._previous_path = path
-            return path
-
+      
+        # Check if the car is in the first lap and not in the acceleration event
+        if self._in_first_lap and not self._acceleration_event:
+            logger.debug("In first lap. Returning constant speed.")
+            return self._use_safe_speed(path)
+          
         # Check if the current path is too similar to the previous one
         if self.check_paths_similar(path, self._previous_path, self._path_similar_mse):
             logger.debug("Path too similar. Using previous speed profile.")
@@ -126,8 +125,7 @@ class SpeedProfileSelector(object):
             logger.debug("Using last known velocity optimal speed profile.")
             self._previous_path = path
             return path
-        
-         # Fallback to a safe speed if optimization fails
+          
         logger.warning("Optimization failed. Falling back to safe speed.")
         return self._use_safe_speed(path)
 
@@ -237,3 +235,15 @@ class SpeedProfileSelector(object):
             v_init=v_init, v_final=v_final,
             speed_limit=speed_limit)
         return path
+
+    def _use_skidpad_speed_profile(self, path, pose):
+        """ Add profile with constant speed to path.
+
+        @param path fs_msgs/PlannedPath without speed profile
+        @return fs_msgs/PlannedPath with speed profile
+        """
+
+        if self._previous_path:
+            return self._previous_path.speed_profile
+    
+        return self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
