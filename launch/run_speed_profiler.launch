@@ -4,6 +4,7 @@
   <!-- Track selection -->
   <!-- Among: "acceleration", "skidpad", "trackdrive" -->
   <arg name="track_name"    default="trackdrive"/>
+  <arg name="mission"    default="3"/>
 
   <group ns="navigation">
     <!-- Speed profiler -->
@@ -11,6 +12,7 @@
     <node name="speed_profiler"  pkg="speed_profiler" type="run_speed_profiler.py" output="screen" >
       <param name="~frame" value="$(arg frame)" />
       <param name="track_name" value="$(arg track_name)" />
+      <param name="mission" value="$(arg mission)" />
 
       <remap from="~skidpad/path/without_speeds" to="/skidpad/planned_path" />
       <remap from="~path/without_speeds" to="/navigation/speed_profiler/path" />
