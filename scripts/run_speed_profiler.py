@@ -30,7 +30,7 @@ if __name__ == '__main__':
             # in ROSInterface and be forwarded to the SpeedProfileSelector here.
             speed_profile_selector.update_lap(ros_interface._lap_counter)
             speed_profile_selector.update_mission(ros_interface.mission)
-
+            
             try:
                 path = speed_profile_selector.select_speed_profile(
                     path_from_planner, ros_interface.vehicle_pose)

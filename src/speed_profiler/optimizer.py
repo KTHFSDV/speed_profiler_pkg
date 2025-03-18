@@ -4,6 +4,7 @@ import time
 import numpy as np
 import osqp
 from scipy import sparse
+from qpsolvers import solve_qp
 
 from speed_profiler.ros_interface import Logger as logger
 
@@ -42,16 +43,15 @@ class SpeedProfileOptimizer(object):
         # OSQP solver instance (initialized in `initialize_solver`)
         self._solver = None
 
-        rospy.loginfo("Finished intializing SpeedProfileOptimizer")
-
     def initialize_solver(self, v_max, v_init, v_final):
         """
         Initialize the OSQP solver with fixed matrix structures.
         """
         # Create problem matrices
+        print("intialize solver")
         P = self._osqp_get_P(self._D1)
         q = self._osqp_get_q(v_max)
-        A, l, u = self._osqp_get_constraints(self._D1, v_max, v_init, v_final)
+        A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
 
         # Initialize the OSQP solver once
         self._solver = osqp.OSQP()
@@ -62,8 +62,9 @@ class SpeedProfileOptimizer(object):
         Update the OSQP solver's problem matrices with new data without reinitializing.
         """
         # Update problem matrices
+        print("Update solver")
         q = self._osqp_get_q(v_max)
-        A, l, u = self._osqp_get_constraints(self._D1, v_max, v_init, v_final)
+        A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
 
         # Update the matrices in the OSQP solver
         self._solver.update(q=q, l=l, u=u)
@@ -83,9 +84,6 @@ class SpeedProfileOptimizer(object):
         @return Speed profile (ndarray, N elements) of optimal speeds (in m/s)
         """
 
-        # Start timing for initialization and solve
-        start_time = time.time()
-
         curvatures = np.array(curvatures)
         distances = np.array(distances)
         self._waypoints_count = curvatures.shape[0]
@@ -101,7 +99,6 @@ class SpeedProfileOptimizer(object):
         # Compute maximum velocities
         v_max = self._compute_v_max(curvatures, speed_limit)
         
-
         # Initialize solver only once, then update for subsequent calls
         if self._solver is None:
             self._D1 = self._get_D1(distances)
@@ -112,21 +109,9 @@ class SpeedProfileOptimizer(object):
         else:
             self.update_solver(v_max, v_init, v_final)
 
-        # Record the time after initialization
-        after_initialization = time.time()
-
         # Solve the optimization problem
         result = self._solver.solve()
-
-        # Record the time after solving
-        after_solving = time.time()
-
-        # Log the time durations
-        initialization_time = after_initialization - start_time
-        solving_time = after_solving - after_initialization
-        rospy.loginfo('Initialization time: {:.4f} seconds'.format(initialization_time))
-        rospy.loginfo('Solving time: {:.4f} seconds'.format(solving_time))
-
+        
         if result.info.status != 'solved':
             logger.error('[Speed profiler] OSQP: Problem not solved. Status: {}'.format(result.info.status))
             return None
@@ -171,7 +156,7 @@ class SpeedProfileOptimizer(object):
         """
         return -2 * np.square(v_max)
 
-    def _osqp_get_constraints(self, D1, v_max, v_init, v_final):
+    def _osqp_get_constraints(self, v_max, v_init, v_final):
         """ Construct constraints for OSQP problem formulation.
 
         @param D1: D1 as sparse matrix
@@ -182,7 +167,7 @@ class SpeedProfileOptimizer(object):
             optimization problem (A as compressed sparse column matrix)
         """
 
-        A = np.append(D1.toarray(), np.eye(self._waypoints_count), axis=0)
+        A = np.append(self._D1.toarray(), np.eye(self._waypoints_count), axis=0)
 
         a_min = self._accel_min * np.ones(self._waypoints_count - 1)
         a_max = self._accel_max * np.ones(self._waypoints_count - 1)
@@ -193,6 +178,7 @@ class SpeedProfileOptimizer(object):
         if v_init is not None:
             w_min[0] = v_init**2
             w_max[0] = v_init**2
+
         if v_final is not None:
             w_min[self._waypoints_count - 1] = v_final**2
             w_max[self._waypoints_count - 1] = v_final**2
@@ -210,6 +196,7 @@ class SpeedProfileOptimizer(object):
         @param distances: Numpy array of distances between waypoints (in m)
         @return D1 as sparse matrix
         """
-        diag = 0.5 / distances
+
+        diag = 0.5 / (distances) 
         return sparse.diags([-diag, diag], [0, 1],
                             shape=(self._waypoints_count - 1, self._waypoints_count))
