@@ -94,6 +94,7 @@ class SpeedProfileSelector(object):
 
         if self.mission == 2:
             path = self._use_skidpad_speed_profile(path)
+            
         else:
             path = self._use_speed_profile(path)
             
@@ -130,12 +131,6 @@ class SpeedProfileSelector(object):
         logger.warning("Optimization failed. Falling back to safe speed.")
         return self._use_safe_speed(path)
 
-    def _smooth_curvature(curvatures, window_size=32):
-        """
-        Smooth the curvature array using a simple moving average filter.
-        """
-        return np.convolve(curvatures, np.ones(window_size)/window_size, mode='same')
-
     # Define a function to calculate the Exponential Moving Average (EMA)
     def calculate_ema(self, data, alpha=0.1):
         ema_values = np.zeros_like(data)
@@ -143,7 +138,6 @@ class SpeedProfileSelector(object):
         for i in range(1, len(data)):
             ema_values[i] = alpha * data[i] + (1 - alpha) * ema_values[i - 1]
         return ema_values
-
 
     def _use_skidpad_speed_profile(self, path):
         """
@@ -156,11 +150,8 @@ class SpeedProfileSelector(object):
             y = np.array(path.y)
             curvatures = np.array(path.curvatures)
 
-            # Example of smoothing the curvature array
+            # Smooth curvature due to curvature data bug
             smoothed_curvatures_ema = self.calculate_ema(curvatures, 0.1)
-
-            # for i in range(len(curvatures)):
-            #     print("Point: {}, curvature = {}".format(i,  smoothed_curvatures_ema[i]))
 
             # Initialize the speed profile with zeros
             speed_profile = np.zeros_like(path.x)
@@ -176,7 +167,6 @@ class SpeedProfileSelector(object):
 
             # Replace the curvatures of duplicates with the average of the previous and next curvature
             new_curvatures = np.copy(smoothed_curvatures_ema)
-            # new_curvatures[1:][duplicates] = (smoothed_curvatures_ema[:-1][duplicates] + smoothed_curvatures_ema[1:][duplicates]) / 2
 
             # Filter out the duplicates by keeping only the first occurrence
             new_x = x[np.concatenate(([True], ~duplicates))]
@@ -202,9 +192,6 @@ class SpeedProfileSelector(object):
                         speed_profile[i] = speed_profile[i-1]
                     else:  # Middle elements, average with both neighbors
                         speed_profile[i] = (speed_profile[i-1] + speed_profile[i+1]) / 2
-
-            for i in range(len(x)):
-                print("Point: {}, x: {}, y: {}, curvature = {}, speed = {}".format(i, x[i], y[i], smoothed_curvatures_ema[i], speed_profile[i]))
 
             path.speed_profile = speed_profile
 

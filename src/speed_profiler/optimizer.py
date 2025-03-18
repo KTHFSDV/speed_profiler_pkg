@@ -48,19 +48,21 @@ class SpeedProfileOptimizer(object):
         Initialize the OSQP solver with fixed matrix structures.
         """
         # Create problem matrices
+        print("intialize solver")
         P = self._osqp_get_P(self._D1)
         q = self._osqp_get_q(v_max)
         A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
 
         # Initialize the OSQP solver once
         self._solver = osqp.OSQP()
-        self._solver.setup(P, q, A, l, u, verbose=True, warm_start=True)
+        self._solver.setup(P, q, A, l, u, verbose=False, warm_start=True)
 
     def update_solver(self, v_max, v_init, v_final):
         """
         Update the OSQP solver's problem matrices with new data without reinitializing.
         """
         # Update problem matrices
+        print("Update solver")
         q = self._osqp_get_q(v_max)
         A, l, u = self._osqp_get_constraints(v_max, v_init, v_final)
 
@@ -109,7 +111,7 @@ class SpeedProfileOptimizer(object):
 
         # Solve the optimization problem
         result = self._solver.solve()
-
+        
         if result.info.status != 'solved':
             logger.error('[Speed profiler] OSQP: Problem not solved. Status: {}'.format(result.info.status))
             return None
