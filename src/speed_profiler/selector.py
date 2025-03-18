@@ -235,15 +235,3 @@ class SpeedProfileSelector(object):
             v_init=v_init, v_final=v_final,
             speed_limit=speed_limit)
         return path
-
-    def _use_skidpad_speed_profile(self, path, pose):
-        """ Add profile with constant speed to path.
-
-        @param path fs_msgs/PlannedPath without speed profile
-        @return fs_msgs/PlannedPath with speed profile
-        """
-
-        if self._previous_path:
-            return self._previous_path.speed_profile
-    
-        return self._use_optimal_speed_profile(path, speed_limit=self.real_speed_limit, v_init=self._safe_speed)
